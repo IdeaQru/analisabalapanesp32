@@ -53,8 +53,8 @@ public:
     static const int PIN_AFR = 34;
     static const int PIN_MAP = 35;
     static const int PIN_TPS = 32;
-    static const int PIN_INCLINE = 21;
-    static const int PIN_STROKE = 22;
+    static const int PIN_INCLINE = 15;
+    static const int PIN_STROKE = 99;
     static const int PIN_TEMP = 33;
     
     static const int PIN_EWP = 31;
@@ -73,7 +73,7 @@ static const unsigned long MENU_PRESS_TIME = 100;      // 1s untuk masuk menu
 static const unsigned long RECORD_PRESS_TIME = 3000;    // 3s untuk recording
 static const unsigned long SHORT_PRESS_TIME = 10;      // Minimum press detection
 static const unsigned long SENSOR_UPDATE_INTERVAL = 7000;
-static const unsigned long GPS_UPDATE_INTERVAL = 7000;
+static const unsigned long GPS_UPDATE_INTERVAL = 3000;
 static const unsigned long COOLING_UPDATE_INTERVAL = 7000;
 static const unsigned long CLASSIFICATION_INTERVAL = 7000;
 static const unsigned long HEALTH_CHECK_INTERVAL = 7000;

@@ -90,9 +90,6 @@ void DisplayManager::update()
         case SystemStatus::TRANSMITTING:
             drawTransmissionDisplay();
             break;
-        case SystemStatus::EMERGENCY:
-            drawEmergencyDisplay();
-            break;
         case SystemStatus::IDLE:
         default:
             drawMainDisplay();
@@ -143,15 +140,15 @@ void DisplayManager::drawAnimatedHeader(const String &title, uint16_t color)
 
     int lineY = Config::MARGIN_Y - 2 - 10;
 
-    for (int i = 0; i < 6; i++)
-    {
-        int x = (Config::SCREEN_WIDTH / 6) * i;
-        int wave = (i % 2 == 0) ? 2 : 1;
-        if (animationFrame % 8 < 4)
-        {
-            tft->drawPixel(x, lineY + wave, color);
-        }
-    }
+    // for (int i = 0; i < 6; i++)
+    // {
+    //     int x = (Config::SCREEN_WIDTH / 6) * i;
+    //     int wave = (i % 2 == 0) ? 2 : 1;
+    //     if (animationFrame % 8 < 4)
+    //     {
+    //         tft->drawPixel(x, lineY + wave, color);
+    //     }
+    // }
 
     tft->fillRect(0, 0, 3, 2, color);
     tft->fillRect(Config::SCREEN_WIDTH - 3, 0, 3, 2, color);
@@ -275,7 +272,7 @@ void DisplayManager::drawMainDisplay()
     
     // **OPTIMASI 1 - Full clear hanya jika diperlukan (kurangi flicker)**
     bool needsFullClear = false;
-    if (currentTime - lastFullClear > 5000) { // 5 detik sekali saja
+    if (currentTime - lastFullClear > 300) { // 5 detik sekali saja
         needsFullClear = true;
         lastFullClear = currentTime;
     }
@@ -299,7 +296,7 @@ void DisplayManager::drawMainDisplay()
                       (abs(currentTemp - lastTemp) > 1.0f) ||
                       (currentGPSValid != lastGPSValid);
     
-    if (needsFullClear || dataChanged || (currentTime - lastDataUpdate > 1000)) {
+    if (needsFullClear || dataChanged || (currentTime - lastDataUpdate > 300)) {
         clearScreen();
         lastDataUpdate = currentTime;
         
@@ -367,7 +364,7 @@ void DisplayManager::drawMainDisplay()
         yPos += 18;
     }
 
-    // **OPTIMASI 4 - Sensor data dengan change detection yang lebih cerdas**
+    // **PERBAIKAN UTAMA - Sensor data batch update untuk tampil bersamaan**
     if (config->showSensors)
     {
         const SensorData &data = sensors.getCurrentData();
@@ -375,44 +372,52 @@ void DisplayManager::drawMainDisplay()
         static float lastAFR = -1, lastMAP = -1, lastTPS = -1, lastRPM = -1;
         static unsigned long lastSensorDisplayUpdate = 0;
         
+        // **KUNCI: Deteksi perubahan SEMUA sensor sekaligus**
         bool sensorDataChanged = (abs(data.afr - lastAFR) > 0.1f) ||
                                 (abs(data.map_value - lastMAP) > 1.0f) ||
                                 (abs(data.tps - lastTPS) > 1.0f) ||
                                 (abs(data.rpm - lastRPM) > 50.0f);
         
-        // Update sensor display setiap 200ms atau jika data berubah signifikan
+        // **BATCH UPDATE - Update SEMUA data sensor bersamaan**
+        // Interval yang sama untuk semua sensor: 300ms
         if (sensorDataChanged || 
-            (currentTime - lastSensorDisplayUpdate > 200) || 
+            (currentTime - lastSensorDisplayUpdate > 300) || 
             needsFullClear) {
             
-            // **Clear sensor area dengan lebih presisi**
+            // **Clear seluruh sensor area sekaligus**
             tft->fillRect(Config::MARGIN_X, yPos, Config::SCREEN_WIDTH - Config::MARGIN_X * 2, 50, ST77XX_BLACK);
 
+            // **RENDER SEMUA DATA SENSOR DALAM SATU BATCH**
             tft->setTextSize(1);
             tft->setTextColor(COLOR_SENSOR_NORMAL);
+            
+            // **Baris pertama: AFR & MAP**
             tft->setCursor(Config::MARGIN_X, yPos);
             tft->printf("AFR:%.1f MAP:%.0f", data.afr, data.map_value);
-
+            
+            // **Progress bar AFR**
             float afrPercent = (data.afr / 18.0f) * 100.0f;
             if (afrPercent > 100) afrPercent = 100;
-            drawProgressBarAnimated(Config::MARGIN_X + 80, yPos + 12, 40, 4, afrPercent, ST77XX_GREEN);
+            // drawProgressBarAnimated(Config::MARGIN_X + 80, yPos + 12, 40, 4, afrPercent, ST77XX_GREEN);
             
+            // **Baris kedua: TPS & RPM**
             int tempYPos = yPos + 20;
             tft->setCursor(Config::MARGIN_X, tempYPos);
             tft->printf("TPS:%.0f%% RPM:%.0f", data.tps, data.rpm);
-
+            
+            // **Progress bar RPM**
             float rpmPercent = (data.rpm / 8000.0f) * 100.0f;
             if (rpmPercent > 100) rpmPercent = 100;
-            drawProgressBarAnimated(Config::MARGIN_X + 80, tempYPos + 12, 40, 4, rpmPercent, ST77XX_CYAN);
+            // drawProgressBarAnimated(Config::MARGIN_X + 80, tempYPos + 12, 40, 4, rpmPercent, ST77XX_CYAN);
             
-            // Update comparison values
+            // **Update SEMUA nilai comparison bersamaan**
             lastAFR = data.afr;
             lastMAP = data.map_value;
             lastTPS = data.tps;
             lastRPM = data.rpm;
             lastSensorDisplayUpdate = currentTime;
         }
-        yPos += 40; // Adjust sesuai dengan sensor area height
+        yPos += 40;
     }
 
     // **OPTIMASI 5 - Data flow indicator yang lebih smooth**
@@ -429,11 +434,11 @@ void DisplayManager::drawMainDisplay()
     }
 
     // Status bar - update dengan interval
-    static unsigned long lastStatusUpdate = 0;
-    if (currentTime - lastStatusUpdate > 500 || needsFullClear) { // Update setiap 500ms
-        drawStatusBar(Config::SCREEN_HEIGHT - STATUS_BAR_HEIGHT);
-        lastStatusUpdate = currentTime;
-    }
+    // static unsigned long lastStatusUpdate = 0;
+    // if (currentTime - lastStatusUpdate > 500 || needsFullClear) { // Update setiap 500ms
+    //     drawStatusBar(Config::SCREEN_HEIGHT - STATUS_BAR_HEIGHT);
+    //     lastStatusUpdate = currentTime;
+    // }
 }
 
 // **PERBAIKAN - Recording display dengan clear area yang proper**
@@ -442,8 +447,8 @@ void DisplayManager::drawRecordingDisplay()
     unsigned long currentTime = millis();
     static unsigned long lastRecordingUpdate = 0;
     
-    // **PERBAIKAN - Clear screen setiap 2 detik**
-    if (currentTime - lastRecordingUpdate > 2000) {
+    // **PERBAIKAN - Clear screen setiap 100ms**
+    if (currentTime - lastRecordingUpdate > 100) {
         clearScreen();
         lastRecordingUpdate = currentTime;
     }
@@ -482,29 +487,50 @@ void DisplayManager::drawRecordingDisplay()
 
     yPos += 25;
 
-    // Speed
+    // **COOLING SYSTEM STATUS - Layout Berdampingan dengan Spacing**
+    tft->setTextSize(1);
+    
+    // **BARIS 1: Temperature dan EWP Status**
+    tft->setTextColor(ST77XX_WHITE);
+    tft->setCursor(Config::MARGIN_X, yPos);
+    tft->printf("Temp: %.1fC", cooling.getCurrentTemp());
+    
+    
+    // **BARIS 2: Fan dan Cutoff Status**
+    tft->setTextColor(cooling.isFanOn() ? ST77XX_RED : ST77XX_GREEN);
+    tft->setCursor(Config::MARGIN_X + 75 , yPos);
+    tft->printf("Fan: %s", cooling.isFanOn() ? "ON" : "OFF");
+  
+    
+    yPos += 12;
+
+      // Cutoff Status di samping kanan dengan spacing
+    tft->setTextColor(cooling.isCutoffActive() ? ST77XX_RED : ST77XX_GREEN);
+    tft->setCursor(Config::MARGIN_X + 75, yPos);  // Spacing 75 pixel
+    tft->printf("Cut: %s", cooling.isCutoffActive() ? "ACT" : "OFF");
+    
+
+    // EWP Status di samping kanan dengan spacing
+    tft->setTextColor(cooling.isEWPOn() ? ST77XX_GREEN : ST77XX_RED);
+    tft->setCursor(Config::MARGIN_X, yPos);  // Spacing 75 pixel
+    tft->printf("EWP: %s", cooling.isEWPOn() ? "ON" : "OFF");
+    yPos += 15;
+
+    // **GPS SPEED (tanpa progress bar)**
     if (sensors.isGPSValid())
     {
         float speed = sensors.getSpeed();
-        tft->setTextSize(1);
-        tft->setTextColor(ST77XX_WHITE);
+        tft->setTextColor(ST77XX_CYAN);
         tft->setCursor(Config::MARGIN_X, yPos);
         tft->printf("Speed: %.1f km/h", speed);
-
-        float speedPercent = (speed / 200.0f) * 100.0f;
-        if (speedPercent > 100) speedPercent = 100;
-        drawProgressBarAnimated(Config::MARGIN_X, yPos + 10, 100, 6, speedPercent, ST77XX_CYAN);
-        yPos += 22;
+        yPos += 12;
     }
-
-    // Temperature
-    if (config->showCoolingStatus)
+    else
     {
-        tft->setTextSize(1);
-        tft->setTextColor(ST77XX_WHITE);
+        tft->setTextColor(ST77XX_RED);
         tft->setCursor(Config::MARGIN_X, yPos);
-        tft->printf("Temp: %.1fC", cooling.getCurrentTemp());
-        yPos += 15;
+        tft->printf("Speed: GPS LOST");
+        yPos += 12;
     }
 
     // AI status
@@ -540,7 +566,7 @@ void DisplayManager::drawRecordingDisplay()
         tft->fillCircle(Config::SCREEN_WIDTH - 10, TITLE_HEIGHT + 5, 2, ST77XX_RED);
     }
 
-    // Status messages
+    // **STATUS BAR - Dengan cooling system summary**
     int statusY = Config::SCREEN_HEIGHT - STATUS_BAR_HEIGHT;
     tft->setTextSize(1);
 
@@ -548,13 +574,20 @@ void DisplayManager::drawRecordingDisplay()
     {
         tft->setTextColor(ST77XX_RED);
         tft->setCursor(Config::MARGIN_X, statusY);
-        tft->println("* RECORDING ACTIVE *");
+        tft->printf("* REC | %s *", cooling.getStatusText().c_str());
+    }
+    else
+    {
+        tft->setTextColor(cooling.getStatusColor());
+        tft->setCursor(Config::MARGIN_X, statusY);
+        tft->printf("COOLING: %s", cooling.getStatusText().c_str());
     }
 
     tft->setTextColor(ST77XX_YELLOW);
     tft->setCursor(Config::MARGIN_X, statusY + 10);
-    tft->println("Pin22:STOP | Pin15 2s:STOP");
+    tft->println("Pin36:STOP | Pin21 2s:STOP");
 }
+
 
 void DisplayManager::drawTransmissionDisplay()
 {
@@ -591,39 +624,6 @@ void DisplayManager::drawTransmissionDisplay()
     tft->printf("Progress: %.0f%%", transmissionProgress);
 }
 
-void DisplayManager::drawEmergencyDisplay()
-{
-    static bool needsRedraw = true;
-    if (needsRedraw)
-    {
-        clearScreen();
-        needsRedraw = false;
-    }
-
-    uint16_t headerColor = blinkState ? ST77XX_RED : ST77XX_YELLOW;
-    drawAnimatedHeader("!!! EMERGENCY !!!", headerColor);
-
-    CoolingSystem &cooling = CoolingSystem::getInstance();
-    int centerY = Config::SCREEN_HEIGHT / 2 - 20;
-
-    tft->setTextSize(2);
-    tft->setTextColor(blinkState ? ST77XX_RED : ST77XX_YELLOW);
-    tft->setCursor(Config::MARGIN_X, centerY);
-    tft->print(blinkState ? "DANGER!" : "WARNING");
-
-    tft->setTextSize(1);
-    tft->setTextColor(ST77XX_WHITE);
-    tft->setCursor(Config::MARGIN_X, centerY + 20);
-    tft->printf("Temperature: %.1fC", cooling.getCurrentTemp());
-
-    float tempPercent = ((cooling.getCurrentTemp() - 80.0f) / 40.0f) * 100.0f;
-    if (tempPercent > 100) tempPercent = 100;
-    if (tempPercent < 0) tempPercent = 0;
-
-    drawProgressBarAnimated(Config::MARGIN_X, centerY + 32,
-                            Config::SCREEN_WIDTH - Config::MARGIN_X * 2, 8,
-                            tempPercent, ST77XX_RED);
-}
 
 void DisplayManager::drawLapConfigMenu()
 {
@@ -1064,12 +1064,7 @@ void DisplayManager::setConfiguration(DisplayConfiguration *cfg)
     config = cfg;
 }
 
-void DisplayManager::showEmergencyMessage(const String &message)
-{
-    clearScreen();
-    drawAnimatedHeader("!!! EMERGENCY !!!", ST77XX_RED);
-    drawCenteredText(message, Config::HEADER_HEIGHT + 30, ST77XX_RED);
-}
+
 
 void DisplayManager::showSystemStatus()
 {

@@ -105,6 +105,7 @@ void CoolingSystem::update(float temperature) {
 void CoolingSystem::emergencyShutdown() {
     Serial.println("EMERGENCY SHUTDOWN INITIATED!");
     digitalWrite(Config::PIN_CUTOFF, HIGH);
+   
     cutoffStatus = true;
 }
 

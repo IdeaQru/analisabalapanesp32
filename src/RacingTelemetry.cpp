@@ -118,12 +118,9 @@ void RacingTelemetry::update()
         buttonHandler->update(); // Ini harus SELALU dipanggil
 
         // **OPTIMASI 2: Update sensors dengan interval yang lebih efisien**
-        static unsigned long lastSensorUpdate = 0;
-        if (currentTime - lastSensorUpdate >= 20) { // Sensor update setiap 20ms
+         // Sensor update setiap 20ms
             sensorManager->update();
             sensorManager->updateGPS();
-            lastSensorUpdate = currentTime;
-        }
 
         // **OPTIMASI 3: Cooling system dengan interval yang wajar**
         static unsigned long lastCoolingUpdate = 0;
@@ -265,11 +262,7 @@ void RacingTelemetry::handleEmergencyCondition(const String &reason)
         displayManager->exitMenu();
     }
 
-    // Log emergency
-    // systemMonitor->handleEmergency(reason);
-
-    // Show emergency display
-    displayManager->showEmergencyMessage(reason);
+    
 }
 
 void RacingTelemetry::handleSerialInput()
