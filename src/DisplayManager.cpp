@@ -973,25 +973,6 @@ void DisplayManager::drawGPSStatus(int x, int y)
     }
 }
 
-// void DisplayManager::drawSystemHealthBar(int x, int y, int width)
-// {
-//     // SystemMonitor &monitor = SystemMonitor::getInstance();
-
-//     float healthPercent = 100.0f;
-//     if (monitor.getErrorCount() > 0) healthPercent -= monitor.getErrorCount() * 10;
-//     if (healthPercent < 0) healthPercent = 0;
-
-//     uint16_t healthColor = ST77XX_GREEN;
-//     if (healthPercent < 30) healthColor = ST77XX_RED;
-//     else if (healthPercent < 70) healthColor = ST77XX_YELLOW;
-
-//     drawProgressBarAnimated(x, y + 8, width, 4, healthPercent, healthColor);
-
-//     tft->setTextSize(1);
-//     tft->setTextColor(healthColor);
-//     tft->setCursor(x, y);
-//     tft->printf("SYS:%.0f%%", healthPercent);
-// }
 
 float DisplayManager::easeInOut(float t)
 {
