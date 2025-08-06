@@ -446,11 +446,19 @@ void DisplayManager::drawRecordingDisplay()
 {
     unsigned long currentTime = millis();
     static unsigned long lastRecordingUpdate = 0;
+    static unsigned long lastSensorCycleUpdate = 0;
+    static int sensorDisplayMode = 0; // 0=Cooling, 1=Engine, 2=GPS+AI
     
     // **PERBAIKAN - Clear screen setiap 100ms**
     if (currentTime - lastRecordingUpdate > 100) {
         clearScreen();
         lastRecordingUpdate = currentTime;
+    }
+
+    // **SENSOR CYCLING - Ganti mode setiap 2 detik**
+    if (currentTime - lastSensorCycleUpdate > 2000) {
+        sensorDisplayMode = (sensorDisplayMode + 1) % 3;
+        lastSensorCycleUpdate = currentTime;
     }
 
     String recText = blinkState ? "[REC]" : " REC ";
@@ -469,13 +477,13 @@ void DisplayManager::drawRecordingDisplay()
     int contentHeight = Config::SCREEN_HEIGHT - STATUS_BAR_HEIGHT - contentStartY - 20;
     tft->fillRect(0, contentStartY, Config::SCREEN_WIDTH, contentHeight, ST77XX_BLACK);
 
-    // Large lap counter
+    // Large lap counter - SELALU TAMPIL
     tft->setTextSize(2);
     tft->setTextColor(ST77XX_WHITE);
     tft->setCursor(Config::MARGIN_X, yPos);
     tft->printf("LAP %d", recording.getCurrentLap());
 
-    // Recording time
+    // Recording time - SELALU TAMPIL
     unsigned long recordTime = (millis() / 1000) % 3600;
     int minutes = recordTime / 60;
     int seconds = recordTime % 60;
@@ -485,62 +493,129 @@ void DisplayManager::drawRecordingDisplay()
     tft->setTextColor(ST77XX_YELLOW);
     tft->printf("%02d:%02d", minutes, seconds);
 
-    yPos += 25;
+    // **SENSOR CYCLE INDICATOR**
+    tft->setTextColor(ST77XX_CYAN);
+    tft->setCursor(Config::MARGIN_X + 70, yPos + 15);
+    String modeNames[] = {"COOLING", "ENGINE", "GPS+AI"};
+    tft->printf("<%s>", modeNames[sensorDisplayMode].c_str());
 
-    // **COOLING SYSTEM STATUS - Layout Berdampingan dengan Spacing**
+    yPos += 35;
+
+    // **ALTERNATING SENSOR DISPLAY BERDASARKAN MODE**
     tft->setTextSize(1);
     
-    // **BARIS 1: Temperature dan EWP Status**
-    tft->setTextColor(ST77XX_WHITE);
-    tft->setCursor(Config::MARGIN_X, yPos);
-    tft->printf("Temp: %.1fC", cooling.getCurrentTemp());
-    
-    
-    // **BARIS 2: Fan dan Cutoff Status**
-    tft->setTextColor(cooling.isFanOn() ? ST77XX_RED : ST77XX_GREEN);
-    tft->setCursor(Config::MARGIN_X + 75 , yPos);
-    tft->printf("Fan: %s", cooling.isFanOn() ? "ON" : "OFF");
-  
-    
-    yPos += 12;
-
-      // Cutoff Status di samping kanan dengan spacing
-    tft->setTextColor(cooling.isCutoffActive() ? ST77XX_RED : ST77XX_GREEN);
-    tft->setCursor(Config::MARGIN_X + 75, yPos);  // Spacing 75 pixel
-    tft->printf("Cut: %s", cooling.isCutoffActive() ? "ACT" : "OFF");
-    
-
-    // EWP Status di samping kanan dengan spacing
-    tft->setTextColor(cooling.isEWPOn() ? ST77XX_GREEN : ST77XX_RED);
-    tft->setCursor(Config::MARGIN_X, yPos);  // Spacing 75 pixel
-    tft->printf("EWP: %s", cooling.isEWPOn() ? "ON" : "OFF");
-    yPos += 15;
-
-    // **GPS SPEED (tanpa progress bar)**
-    if (sensors.isGPSValid())
-    {
-        float speed = sensors.getSpeed();
-        tft->setTextColor(ST77XX_CYAN);
-        tft->setCursor(Config::MARGIN_X, yPos);
-        tft->printf("Speed: %.1f km/h", speed);
-        yPos += 12;
+    switch(sensorDisplayMode) {
+        case 0: // COOLING SYSTEM MODE
+            {
+                // **Temperature**
+                tft->setTextColor(ST77XX_WHITE);
+                tft->setCursor(Config::MARGIN_X, yPos);
+                tft->printf("Temp: %.1fC", cooling.getCurrentTemp());
+                
+                // **Fan Status**
+                tft->setTextColor(cooling.isFanOn() ? ST77XX_RED : ST77XX_GREEN);
+                tft->setCursor(Config::MARGIN_X + 75, yPos);
+                tft->printf("Fan: %s", cooling.isFanOn() ? "ON" : "OFF");
+                yPos += 12;
+                
+                // **EWP Status**
+                tft->setTextColor(cooling.isEWPOn() ? ST77XX_GREEN : ST77XX_RED);
+                tft->setCursor(Config::MARGIN_X, yPos);
+                tft->printf("EWP: %s", cooling.isEWPOn() ? "ON" : "OFF");
+                
+                // **Cutoff Status**
+                tft->setTextColor(cooling.isCutoffActive() ? ST77XX_RED : ST77XX_GREEN);
+                tft->setCursor(Config::MARGIN_X + 75, yPos);
+                tft->printf("Cut: %s", cooling.isCutoffActive() ? "ACT" : "OFF");
+                yPos += 12;
+                
+                // **Cooling Status Text**
+                tft->setTextColor(cooling.getStatusColor());
+                tft->setCursor(Config::MARGIN_X, yPos);
+                tft->printf("Status: %s", cooling.getStatusText().c_str());
+            }
+            break;
+            
+        case 1: // ENGINE SENSOR MODE
+            {
+                const SensorData &data = sensors.getCurrentData();
+                
+                // **Baris 1: AFR & MAP**
+                tft->setTextColor(COLOR_SENSOR_NORMAL);
+                tft->setCursor(Config::MARGIN_X, yPos);
+                tft->printf("AFR: %.1f", data.afr);
+                
+                tft->setCursor(Config::MARGIN_X + 70, yPos);
+                tft->printf("MAP: %.0f", data.map_value);
+                yPos += 12;
+                
+                // **Baris 2: TPS & RPM**
+                tft->setCursor(Config::MARGIN_X, yPos);
+                tft->printf("TPS: %.0f%%", data.tps);
+                
+                tft->setCursor(Config::MARGIN_X + 70, yPos);
+                tft->printf("RPM: %.0f", data.rpm);
+                yPos += 12;
+                
+                // **Progress Bars untuk Engine Data**
+                // AFR Progress (Target: 14.7)
+                float afrPercent = (data.afr / 18.0f) * 100.0f;
+                if (afrPercent > 100) afrPercent = 100;
+                drawProgressBarAnimated(Config::MARGIN_X, yPos, 60, 4, afrPercent, ST77XX_GREEN);
+                
+                // RPM Progress (Max: 8000)
+                float rpmPercent = (data.rpm / 8000.0f) * 100.0f;
+                if (rpmPercent > 100) rpmPercent = 100;
+                drawProgressBarAnimated(Config::MARGIN_X + 70, yPos, 60, 4, rpmPercent, ST77XX_CYAN);
+            }
+            break;
+            
+        case 2: // GPS + AI MODE
+            {
+                // **GPS Speed dan Status**
+                if (sensors.isGPSValid())
+                {
+                    float speed = sensors.getSpeed();
+                    tft->setTextColor(ST77XX_CYAN);
+                    tft->setCursor(Config::MARGIN_X, yPos);
+                    tft->printf("Speed: %.1f km/h", speed);
+                    
+                    tft->setCursor(Config::MARGIN_X + 75, yPos);
+                    tft->printf("Sat: %d", sensors.getSatelliteCount());
+                    yPos += 12;
+                    
+                    // **GPS Coordinates**
+                    tft->setTextColor(ST77XX_WHITE);
+                    tft->setCursor(Config::MARGIN_X, yPos);
+                    tft->printf("Lat: %.4f", sensors.getLatitude());
+                    yPos += 12;
+                    
+                    tft->setCursor(Config::MARGIN_X, yPos);
+                    tft->printf("Lng: %.4f", sensors.getLongitude());
+                }
+                else
+                {
+                    tft->setTextColor(ST77XX_RED);
+                    tft->setCursor(Config::MARGIN_X, yPos);
+                    tft->printf("GPS: SEARCHING...");
+                    yPos += 12;
+                    
+                    tft->setCursor(Config::MARGIN_X, yPos);
+                    tft->printf("No Satellite Fix");
+                }
+                yPos += 12;
+                
+                // **AI Classification**
+                tft->setTextColor(classifier.getClassificationColor(system.getCurrentClassification()));
+                tft->setCursor(Config::MARGIN_X, yPos);
+                tft->printf("AI: %s", system.getClassificationText().c_str());
+            }
+            break;
     }
-    else
-    {
-        tft->setTextColor(ST77XX_RED);
-        tft->setCursor(Config::MARGIN_X, yPos);
-        tft->printf("Speed: GPS LOST");
-        yPos += 12;
-    }
 
-    // AI status
-    tft->setTextSize(1);
-    tft->setTextColor(classifier.getClassificationColor(system.getCurrentClassification()));
-    tft->setCursor(Config::MARGIN_X, yPos);
-    tft->printf("AI: %s", system.getClassificationText().c_str());
-    yPos += 15;
+    yPos += 20;
 
-    // Simple stop button
+    // Simple stop button - SELALU TAMPIL
     int buttonX = Config::MARGIN_X;
     int buttonY = yPos;
     int buttonWidth = 100;
@@ -560,13 +635,13 @@ void DisplayManager::drawRecordingDisplay()
     tft->setCursor(buttonX, buttonY);
     tft->print("[SELECT] STOP REC");
 
-    // Recording indicator
+    // Recording indicator - SELALU TAMPIL
     if (animationFrame % 12 < 6)
     {
         tft->fillCircle(Config::SCREEN_WIDTH - 10, TITLE_HEIGHT + 5, 2, ST77XX_RED);
     }
 
-    // **STATUS BAR - Dengan cooling system summary**
+    // **STATUS BAR dengan Mode Indicator**
     int statusY = Config::SCREEN_HEIGHT - STATUS_BAR_HEIGHT;
     tft->setTextSize(1);
 
@@ -574,13 +649,13 @@ void DisplayManager::drawRecordingDisplay()
     {
         tft->setTextColor(ST77XX_RED);
         tft->setCursor(Config::MARGIN_X, statusY);
-        tft->printf("* REC | %s *", cooling.getStatusText().c_str());
+        tft->printf("* REC | Mode:%s *", modeNames[sensorDisplayMode].c_str());
     }
     else
     {
-        tft->setTextColor(cooling.getStatusColor());
+        tft->setTextColor(ST77XX_YELLOW);
         tft->setCursor(Config::MARGIN_X, statusY);
-        tft->printf("COOLING: %s", cooling.getStatusText().c_str());
+        tft->printf("Mode: %s [2s cycle]", modeNames[sensorDisplayMode].c_str());
     }
 
     tft->setTextColor(ST77XX_YELLOW);
