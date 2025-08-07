@@ -107,7 +107,6 @@ void RacingTelemetry::initialize()
 void RacingTelemetry::update()
 {
     unsigned long currentTime = millis();
-
     // **OPTIMASI 1: Tingkatkan frequency untuk button responsiveness**
     if (currentTime - lastUpdate < 5) // Turun dari 10ms ke 5ms
         return; 
@@ -206,35 +205,6 @@ void RacingTelemetry::updateAIClassification()
         classificationText = "Error";
     }
 }
-
-// void RacingTelemetry::checkSystemHealth()
-// {
-//     static unsigned long lastHealthCheck = 0;
-//     unsigned long currentTime = millis();
-
-//     if (currentTime - lastHealthCheck >= 10000)
-//     { // Check every 10 seconds
-//         // Check memory usage
-//         if (systemMonitor->getMemoryUsagePercent() > 85.0f)
-//         {
-//             systemMonitor->logWarning("High memory usage detected");
-//         }
-
-//         // Check system errors
-//         if (systemMonitor->getErrorCount() > 5)
-//         {
-//             systemMonitor->handleEmergency("Multiple system errors detected");
-//         }
-
-//         // Check GPS status during recording
-//         if (currentStatus == SystemStatus::RECORDING && !sensorManager->isGPSValid())
-//         {
-//             systemMonitor->logWarning("GPS signal lost during recording");
-//         }
-
-//         lastHealthCheck = currentTime;
-//     }
-// }
 
 void RacingTelemetry::handleEmergencyCondition(const String &reason)
 {

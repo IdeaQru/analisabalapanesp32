@@ -17,8 +17,8 @@ void SensorManager::initialize() {
     pinMode(Config::PIN_AFR, INPUT);
     pinMode(Config::PIN_MAP, INPUT);
     pinMode(Config::PIN_TPS, INPUT);
-    // pinMode(Config::PIN_INCLINE, INPUT);
-    // pinMode(Config::PIN_STROKE, INPUT);
+    pinMode(Config::PIN_INCLINE, INPUT);
+    pinMode(Config::PIN_STROKE, INPUT);
     
     // Initialize GPS
     gps = new TinyGPSPlus();
@@ -100,15 +100,39 @@ float SensorManager::readMAPSensor() {
     return pressure;
 }
 
-float SensorManager::readTPSSensor() {
+float SensorManager::readTPSSensor() { // ini yang belum di pulldown
+    // Baca nilai ADC mentah
     int rawValue = analogRead(Config::PIN_TPS);
+    
+    // Konversi ke persentase (0-100% berdasarkan ADC 12-bit)
     float percentage = (rawValue / 4095.0) * 100.0;
     
-    if (percentage < 0) percentage = 0;
-    if (percentage > 100) percentage = 100;
+    // Konstrain nilai dalam range yang valid
+    percentage = constrain(percentage, 0, 100);
+    
+    // Mapping dari range aktual (16-100) ke range yang diinginkan (0-100)
+    if (percentage >= 16.0) {
+        // Gunakan map() dengan floating point
+        percentage = ((percentage - 16.0) / (100.0 - 16.0)) * 100.0;
+    } else {
+        // Jika pembacaan di bawah 16%, anggap sebagai 0%
+        percentage = 0.0;
+    }
+    
+    // Konstrain hasil akhir
+    percentage = constrain(percentage, 0, 100);
     
     return percentage;
 }
+// float SensorManager::readTPSSensor() { // ini harus di pulldown
+//     int rawValue = analogRead(Config::PIN_TPS);
+//     float percentage = (rawValue / 4095.0) * 100.0;
+    
+//     if (percentage < 0) percentage = 0;
+//     if (percentage > 100) percentage = 100;
+//     map(percentage, 0, 100, 0, 100);
+//     return percentage;
+// }
 
 float SensorManager::readInclineSensor() {
     int rawValue = analogRead(Config::PIN_INCLINE);

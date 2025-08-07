@@ -71,13 +71,13 @@ public:
   static const int BTN_REC = 21;                       // Pin 15 untuk RECORDING (khusus)
   static const unsigned long CURSOR_PRESS_TIME = 10;   // 0.1s untuk cursor/navigation
   static const unsigned long MENU_PRESS_TIME = 100;    // 1s untuk masuk menu
-  static const unsigned long RECORD_PRESS_TIME = 3000; // 3s untuk recording
+  static const unsigned long RECORD_PRESS_TIME = 100; // 3s untuk recording
   static const unsigned long SHORT_PRESS_TIME = 10;    // Minimum press detection
-  static const unsigned long SENSOR_UPDATE_INTERVAL = 7000;
-  static const unsigned long GPS_UPDATE_INTERVAL = 3000;
-  static const unsigned long COOLING_UPDATE_INTERVAL = 7000;
-  static const unsigned long CLASSIFICATION_INTERVAL = 7000;
-  static const unsigned long HEALTH_CHECK_INTERVAL = 7000;
+  static const unsigned long SENSOR_UPDATE_INTERVAL = 100;
+  static const unsigned long GPS_UPDATE_INTERVAL = 300;
+  static const unsigned long COOLING_UPDATE_INTERVAL = 100;
+  static const unsigned long CLASSIFICATION_INTERVAL = 100;
+  static const unsigned long HEALTH_CHECK_INTERVAL = 100;
   static const unsigned long RESPONSIVE_PRESS_TIME = 10; // 0.1s untuk RESPONSIVE_PRESS_TIME
 
   // Temperature Settings
