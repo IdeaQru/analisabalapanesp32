@@ -355,8 +355,8 @@ int KNNClassifier::classify(const SensorData& data) {
 
 String KNNClassifier::getClassificationText(int classification) {
     switch (classification) {
-        case 0: return "Normal Operation";
-        case 1: return "Normal Startup";
+        case 0: return "Normal ";
+        case 1: return "Normal ";
         case 2: return "Maintenance Required";
         case 3: return "Critical Condition";
         default: return "Unknown";
