@@ -11,14 +11,58 @@ SensorManager::~SensorManager() {
     delete tempSensor;
     delete oneWire;
 }
+// Static instance pointer
+SensorManager* SensorManager::instance = nullptr;
+
+// Interrupt handler function
+void IRAM_ATTR SensorManager::rpmInterruptHandler() {
+    if (instance) {
+        instance->rpmPulseCount++;
+    }
+}
+
+// RPM sensor reading with interrupt
+float SensorManager::readRPMSensor() {
+    unsigned long currentTime = millis();
+    unsigned long timeInterval = currentTime - lastRPMCalculation;
+    
+    // Hitung RPM setiap 1000ms
+    if (timeInterval >= 1000) {
+        // Disable interrupt sementara untuk membaca data
+        noInterrupts();
+        unsigned long pulses = rpmPulseCount;
+        rpmPulseCount = 0;
+        interrupts();
+        
+        // Hitung RPM
+        // Untuk sensor yang memberikan 1 pulse per revolution
+        currentRPM = (pulses * 60.0) / (timeInterval / 1000.0);
+        
+        // Konstrain dan filter
+        currentRPM = constrain(currentRPM, 0, 8000);
+        if (currentRPM < 200) currentRPM = 0;
+        
+        lastRPMCalculation = currentTime;
+    }
+    
+    return currentRPM;
+}
 
 void SensorManager::initialize() {
     // Initialize analog sensor pins
     pinMode(Config::PIN_AFR, INPUT);
     pinMode(Config::PIN_MAP, INPUT);
+    instance = this;
+    rpmPulseCount = 0;
+    lastRPMCalculation = millis();
+    currentRPM = 0.0;
+    
+    pinMode(Config::PIN_RPM, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(Config::PIN_RPM), rpmInterruptHandler, FALLING);
     pinMode(Config::PIN_TPS, INPUT);
     pinMode(Config::PIN_INCLINE, INPUT);
     pinMode(Config::PIN_STROKE, INPUT);
+
     
     // Initialize GPS
     gps = new TinyGPSPlus();
@@ -45,8 +89,9 @@ void SensorManager::update() {
     
     if (currentTime - lastSensorUpdate >= Config::SENSOR_UPDATE_INTERVAL) {
         // Read all sensors
-        currentData.afr = readAFRSensor();
-        currentData.rpm = estimateRPM();
+        // currentData.afr = readAFRSensor(); // real pembacaan
+        currentData.afr = random(11.20, 12.00); // For testing  ();
+        currentData.rpm = readRPMSensor();
         currentData.temp = readTemperatureSensor();
         currentData.tps = readTPSSensor();
         currentData.map_value = readMAPSensor();
@@ -100,39 +145,84 @@ float SensorManager::readMAPSensor() {
     return pressure;
 }
 
-float SensorManager::readTPSSensor() { // ini yang belum di pulldown
-    // Baca nilai ADC mentah
-    int rawValue = analogRead(Config::PIN_TPS);
-    
-    // Konversi ke persentase (0-100% berdasarkan ADC 12-bit)
-    float percentage = (rawValue / 4095.0) * 100.0;
-    
-    // Konstrain nilai dalam range yang valid
-    percentage = constrain(percentage, 0, 100);
-    
-    // Mapping dari range aktual (16-100) ke range yang diinginkan (0-100)
-    if (percentage >= 16.0) {
-        // Gunakan map() dengan floating point
-        percentage = ((percentage - 16.0) / (100.0 - 16.0)) * 100.0;
-    } else {
-        // Jika pembacaan di bawah 16%, anggap sebagai 0%
-        percentage = 0.0;
-    }
-    
-    // Konstrain hasil akhir
-    percentage = constrain(percentage, 0, 100);
-    
-    return percentage;
-}
-// float SensorManager::readTPSSensor() { // ini harus di pulldown
+// float SensorManager::readTPSSensor() { // ini yang belum di pulldown
+//     // Baca nilai ADC mentah
 //     int rawValue = analogRead(Config::PIN_TPS);
+    
+//     // Konversi ke persentase (0-100% berdasarkan ADC 12-bit)
 //     float percentage = (rawValue / 4095.0) * 100.0;
     
-//     if (percentage < 0) percentage = 0;
-//     if (percentage > 100) percentage = 100;
-//     map(percentage, 0, 100, 0, 100);
+//     // Konstrain nilai dalam range yang valid
+//     percentage = constrain(percentage, 0, 100);
+    
+//     // Mapping dari range aktual (16-100) ke range yang diinginkan (0-100)
+//     if (percentage >= 16.0) {
+//         // Gunakan map() dengan floating point
+//         percentage = ((percentage - 16.0) / (100.0 - 16.0)) * 100.0;
+//     } else {
+//         // Jika pembacaan di bawah 16%, anggap sebagai 0%
+//         percentage = 0.0;
+//     }
+    
+//     // Konstrain hasil akhir
+//     percentage = constrain(percentage, 0, 100);
+    
 //     return percentage;
 // }
+float SensorManager::readTPSSensor() {
+    // Variabel untuk smoothing dan filtering
+    static float previousReading = 0.0;
+    static unsigned long lastReadTime = 0;
+    static float smoothedValue = 0.0;
+    
+    // Multi-sampling untuk mengurangi noise
+    const int numSamples = 10;
+    unsigned long totalReading = 0;
+    
+    // Ambil multiple samples untuk averaging
+    for (int i = 0; i < numSamples; i++) {
+        totalReading += analogRead(Config::PIN_TPS);
+        delayMicroseconds(100); // Small delay between readings
+    }
+    
+    // Hitung rata-rata ADC value
+    float avgRawValue = totalReading / (float)numSamples;
+    
+    // Konversi ke voltage (ESP32 ADC 12-bit, 3.3V reference)
+    float voltage = avgRawValue * (5.0 / 4095.0);
+    
+    // Kalibrasi berdasarkan karakteristik TPS
+    // TPS standar: Idle = 0.6-0.9V, WOT = 3.5-4.7V
+    // Mapping voltage ke percentage
+    float percentage;
+    
+    if (voltage <= 1.2) {
+        // Throttle tertutup penuh
+        percentage = 0.0;
+    } else {
+        // Linear mapping dari voltage ke percentage
+        percentage = ((voltage - 0.6) / (4.5 - 0.6)) * 100.0;
+    }
+    
+    // Konstrain hasil dalam range 0-100%
+    percentage = constrain(percentage, 0.0, 100.0);
+    
+    // Terapkan low-pass filter untuk smoothing
+    unsigned long currentTime = millis();
+    if (currentTime - lastReadTime > 20) { // Update setiap 50ms
+        float alpha = 0.2; // Smoothing factor (0-1, semakin kecil semakin smooth)
+        smoothedValue = (alpha * percentage) + ((1 - alpha) * smoothedValue);
+        lastReadTime = currentTime;
+    }
+    
+    // Dead zone untuk mengurangi jitter di idle
+    if (smoothedValue < 2.0) {
+        smoothedValue = 0.0;
+    }
+    
+    return smoothedValue;
+}
+
 
 float SensorManager::readInclineSensor() {
     int rawValue = analogRead(Config::PIN_INCLINE);
@@ -165,7 +255,6 @@ float SensorManager::readTemperatureSensor() {
     
     if (temp < -40.0) temp = -40.0;
     if (temp > 150.0) temp = 150.0;
-    
     return temp;
 }
 
@@ -182,6 +271,7 @@ float SensorManager::estimateRPM() {
     
     return estimatedRPM;
 }
+
 
 bool SensorManager::isGPSValid() const {
     return gps->location.isValid();

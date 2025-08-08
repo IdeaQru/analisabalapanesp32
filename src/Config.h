@@ -29,8 +29,15 @@ class Config
 {
 public:
   // System Constants
-  static const int TRAIN_DATA_SIZE = 150;
+  static const int TRAIN_DATA_SIZE = 200; // Updated to 200 samples
   static const int K_VALUE = 3;
+  static const int NUM_CLASSES = 4; // Updated to 4 classes
+
+  // Classification thresholds for hybrid approach
+   const float COLD_ENGINE_THRESHOLD = 65.0; // °C
+   const float WARM_ENGINE_THRESHOLD = 75.0; // °C
+   const float CRITICAL_AFR_MIN = 11.0;
+   const float CRITICAL_AFR_MAX = 12.0;
   static const int TIME_OPTIONS_COUNT = 34;
 
   // Display Constants
@@ -51,10 +58,12 @@ public:
   static const int GPS_RX = 16;
   static const int GPS_TX = 17;
 
-  static const int PIN_AFR = 34;
+  static const int PIN_AFR = 26;
   static const int PIN_MAP = 35;
   static const int PIN_TPS = 32;
   static const int PIN_INCLINE = 15;
+  static const int PIN_RPM = 25;
+
   static const int PIN_STROKE = 99;
   static const int PIN_TEMP = 33;
 
@@ -64,15 +73,15 @@ public:
 
   static const int BTN_CURSOR = 36;
   static const int BTN_TX = 39;
-  static const int LED_PIN = 26;
+  static const int LED_PIN = 34;
 
   // Timing Constants
   // Timing Constants - UPDATED
-  static const int BTN_REC = 21;                       // Pin 15 untuk RECORDING (khusus)
-  static const unsigned long CURSOR_PRESS_TIME = 10;   // 0.1s untuk cursor/navigation
-  static const unsigned long MENU_PRESS_TIME = 100;    // 1s untuk masuk menu
+  static const int BTN_REC = 21;                      // Pin 15 untuk RECORDING (khusus)
+  static const unsigned long CURSOR_PRESS_TIME = 10;  // 0.1s untuk cursor/navigation
+  static const unsigned long MENU_PRESS_TIME = 100;   // 1s untuk masuk menu
   static const unsigned long RECORD_PRESS_TIME = 100; // 3s untuk recording
-  static const unsigned long SHORT_PRESS_TIME = 10;    // Minimum press detection
+  static const unsigned long SHORT_PRESS_TIME = 10;   // Minimum press detection
   static const unsigned long SENSOR_UPDATE_INTERVAL = 100;
   static const unsigned long GPS_UPDATE_INTERVAL = 300;
   static const unsigned long COOLING_UPDATE_INTERVAL = 100;

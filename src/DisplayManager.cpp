@@ -289,7 +289,7 @@ void DisplayManager::drawMainDisplay()
     
     // Check for significant data changes
     String currentClassificationText = system.getClassificationText();
-    float currentTemp = cooling.getCurrentTemp();
+    float currentTemp = sensors.readTemperatureSensor();
     bool currentGPSValid = sensors.isGPSValid();
     
     bool dataChanged = (currentClassificationText != lastClassificationText) ||
