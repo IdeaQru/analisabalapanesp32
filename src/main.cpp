@@ -1,5 +1,5 @@
 #include "RacingTelemetry.h"
-
+// pembaruan hari ini
 RacingTelemetry* racingSystem = nullptr;
 
 void setup() {
