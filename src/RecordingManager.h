@@ -30,11 +30,12 @@ private:
     void appendLapSummaryToFile(int lapNumber, unsigned long lapTime);
     void closeDataFile();
     double calculateDistance(double lat1, double lng1, double lat2, double lng2);
-
+ 
 public:
     RecordingManager();
     ~RecordingManager();
     
+    void transmitLiveSensorData();
     void initialize();
     void update();
     void updateLapProgress();

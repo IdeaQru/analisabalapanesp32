@@ -11,6 +11,7 @@
 #include <DallasTemperature.h>
 #include <SPIFFS.h>
 #include <math.h>
+bool realTime = false;
 
 // === COLOR DEFINITIONS ===
 #ifndef ST77XX_BLACK
@@ -34,10 +35,10 @@ public:
   static const int NUM_CLASSES = 4; // Updated to 4 classes
 
   // Classification thresholds for hybrid approach
-   const float COLD_ENGINE_THRESHOLD = 65.0; // °C
-   const float WARM_ENGINE_THRESHOLD = 75.0; // °C
-   const float CRITICAL_AFR_MIN = 11.0;
-   const float CRITICAL_AFR_MAX = 12.0;
+  const float COLD_ENGINE_THRESHOLD = 65.0; // °C
+  const float WARM_ENGINE_THRESHOLD = 75.0; // °C
+  const float CRITICAL_AFR_MIN = 11.0;
+  const float CRITICAL_AFR_MAX = 12.0;
   static const int TIME_OPTIONS_COUNT = 34;
 
   // Display Constants
@@ -74,7 +75,6 @@ public:
   static const int BTN_CURSOR = 36;
   static const int BTN_TX = 39;
   static const int LED_PIN = 34;
-
   // Timing Constants
   // Timing Constants - UPDATED
   static const int BTN_REC = 21;                      // Pin 15 untuk RECORDING (khusus)

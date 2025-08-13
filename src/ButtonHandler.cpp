@@ -49,6 +49,13 @@ void ButtonHandler::initialize() {
     isRecLongPressTriggered = false;
     isCursorMenuTriggered = false;
     lastResponsiveUpdate = millis();
+    if (digitalRead(Config::BTN_TX) == HIGH)
+    {
+        realTime = true; 
+    }else
+    {
+        realTime = false;
+    }
     
     Serial.println("=== Button Configuration (PULLDOWN MODE) ===");
     Serial.printf("REC Button: Pin %d - Hold 2s: Start/Stop Recording\n", Config::BTN_REC);
