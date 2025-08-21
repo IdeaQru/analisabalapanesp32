@@ -6,7 +6,7 @@ RacingTelemetry::RacingTelemetry()
       currentStatus(SystemStatus::IDLE), lastUpdate(0), lastClassification(0),
       currentClassification(0), classificationText("Normal"), serialActive(false),
       apiEndpoint("https://http://47.237.23.149:7187/api/telemetry"),
-      apiKey("your-api-key-here"), deviceId("racing-car-001"),
+      apiKey("your-api-key-here"), deviceId("racing-001"),
       ssid("YOUR_WIFI_SSID"), password("YOUR_WIFI_PASSWORD")
 {
 }
