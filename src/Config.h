@@ -11,7 +11,9 @@
 #include <DallasTemperature.h>
 #include <SPIFFS.h>
 #include <math.h>
-bool realTime = false;
+// Config.h
+extern bool realTime;
+
 
 // === COLOR DEFINITIONS ===
 #ifndef ST77XX_BLACK

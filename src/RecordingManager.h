@@ -7,6 +7,7 @@
 class RecordingManager {
 private:
     bool isRecording;
+    bool realTime;
     bool isTransmitting;
     int currentLap;
     float currentLapDistance;

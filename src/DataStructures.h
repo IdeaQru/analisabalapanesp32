@@ -2,7 +2,6 @@
 #define DATA_STRUCTURES_H
 
 #include "Config.h"
-
 // === ENUMS ===
 enum class LapDetectionMode {
     GPS_RETURN_TO_START = 0,

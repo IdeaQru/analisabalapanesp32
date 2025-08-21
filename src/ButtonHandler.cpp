@@ -51,10 +51,10 @@ void ButtonHandler::initialize() {
     lastResponsiveUpdate = millis();
     if (digitalRead(Config::BTN_TX) == HIGH)
     {
-        realTime = true; 
+       bool realTime = true; 
     }else
     {
-        realTime = false;
+       bool realTime = false;
     }
     
     Serial.println("=== Button Configuration (PULLDOWN MODE) ===");

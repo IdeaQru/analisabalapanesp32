@@ -3,9 +3,11 @@
 RacingTelemetry::RacingTelemetry()
     : classifier(nullptr), coolingSystem(nullptr), sensorManager(nullptr),
       displayManager(nullptr), buttonHandler(nullptr), recordingManager(nullptr),
-    //   systemMonitor(nullptr), currentStatus(SystemStatus::IDLE),
-      lastUpdate(0), lastClassification(0), currentClassification(0),
-      classificationText("Normal")
+      currentStatus(SystemStatus::IDLE), lastUpdate(0), lastClassification(0),
+      currentClassification(0), classificationText("Normal"), serialActive(false),
+      apiEndpoint("https://http://47.237.23.149:7187/api/telemetry"),
+      apiKey("your-api-key-here"), deviceId("racing-car-001"),
+      ssid("YOUR_WIFI_SSID"), password("YOUR_WIFI_PASSWORD")
 {
 }
 
@@ -29,7 +31,6 @@ void RacingTelemetry::initialize()
     displayManager = &DisplayManager::getInstance();
     buttonHandler = &ButtonHandler::getInstance();
     recordingManager = &RecordingManager::getInstance();
-    // systemMonitor = &SystemMonitor::getInstance();
 
     // Verify all instances are valid
     if (!classifier || !coolingSystem || !sensorManager || !displayManager ||
@@ -62,14 +63,23 @@ void RacingTelemetry::initialize()
         recordingManager->initialize();
         Serial.println("✓ Recording Manager initialized");
 
-        // systemMonitor->initialize();
         Serial.println("✓ System Monitor initialized");
     }
     catch (...)
     {
         Serial.println("ERROR: Exception during component initialization!");
-        // systemMonitor->handleEmergency("Initialization failed");
         return;
+    }
+
+    // Initialize WiFi
+    Serial.println("Initializing WiFi connection...");
+    if (connectToWiFi())
+    {
+        Serial.println("✓ WiFi connection established");
+    }
+    else
+    {
+        Serial.println("⚠ WiFi connection failed - API features disabled");
     }
 
     // Set configurations
@@ -85,9 +95,6 @@ void RacingTelemetry::initialize()
     lastClassification = millis();
     currentClassification = 0;
     classificationText = "Normal";
-
-    // Perform initial system health check
-    // systemMonitor->performHealthCheck();
 
     Serial.println("=== Racing Telemetry System Ready ===");
     Serial.printf("Training Data: %d samples, K=%d\n", Config::TRAIN_DATA_SIZE, Config::K_VALUE);
@@ -109,7 +116,7 @@ void RacingTelemetry::update()
     unsigned long currentTime = millis();
     // **OPTIMASI 1: Tingkatkan frequency untuk button responsiveness**
     if (currentTime - lastUpdate < 5) // Turun dari 10ms ke 5ms
-        return; 
+        return;
 
     try
     {
@@ -117,16 +124,17 @@ void RacingTelemetry::update()
         buttonHandler->update(); // Ini harus SELALU dipanggil
 
         // **OPTIMASI 2: Update sensors dengan interval yang lebih efisien**
-         // Sensor update setiap 20ms
-            sensorManager->update();
-            sensorManager->updateGPS();
+        // Sensor update setiap 20ms
+        sensorManager->update();
+        sensorManager->updateGPS();
 
         // **OPTIMASI 3: Cooling system dengan interval yang wajar**
         static unsigned long lastCoolingUpdate = 0;
-        if (currentTime - lastCoolingUpdate >= 20) { // Cooling update setiap 100ms
+        if (currentTime - lastCoolingUpdate >= 20)
+        { // Cooling update setiap 20ms
             float currentTemp = sensorManager->getCurrentTemperature();
             coolingSystem->update(currentTemp);
-            
+
             // Check for emergency conditions
             if (coolingSystem->isCutoffActive() && currentTemp >= coolingSystem->getCutoffTemp())
             {
@@ -148,6 +156,8 @@ void RacingTelemetry::update()
                 Serial.println("All laps completed - stopping recording");
                 stopRecording();
             }
+
+            // **TAMBAHAN: Auto-send ke API selama recording**
         }
 
         // **OPTIMASI 4: AI classification dengan interval yang tepat**
@@ -156,14 +166,26 @@ void RacingTelemetry::update()
             updateAIClassification();
             lastClassification = currentTime;
         }
+        static unsigned long lastAPISend = 0;
+        if (currentTime - lastAPISend >= 1000)
+        { // 1000ms = 1 detik
+            // Kirim data ke API hanya jika WiFi connected
+            if (WiFi.status() == WL_CONNECTED)
+            {
+                sendCurrentDataToAPI();
+                lastAPISend = currentTime;
+            }
+            else
+            {
+                Serial.println("WiFi not connected - skipping API send");
+                lastAPISend = currentTime; // Reset timer even if failed
+            }
+        }
         displayManager->update(); // Ini penting untuk responsivitas visual
-
-       
     }
     catch (...)
     {
         Serial.println("ERROR: Exception in main update loop!");
-        // systemMonitor->logError("Main update loop exception");
     }
 
     lastUpdate = currentTime;
@@ -190,7 +212,6 @@ void RacingTelemetry::updateAIClassification()
             if (currentClassification == 2)
             { // Critical
                 Serial.println("WARNING: AI detected critical engine condition!");
-                // systemMonitor->logWarning("AI detected critical condition: " + classificationText);
             }
         }
 
@@ -200,7 +221,6 @@ void RacingTelemetry::updateAIClassification()
     catch (...)
     {
         Serial.println("ERROR: Exception in AI classification!");
-        // systemMonitor->logError("AI classification failed");
         currentClassification = 0; // Default to normal
         classificationText = "Error";
     }
@@ -231,8 +251,6 @@ void RacingTelemetry::handleEmergencyCondition(const String &reason)
     {
         displayManager->exitMenu();
     }
-
-    
 }
 
 void RacingTelemetry::handleSerialInput()
@@ -283,6 +301,10 @@ void RacingTelemetry::handleSerialCommand(const String &command)
         serialActive = true;
         transmitData();
     }
+    else if (cmd == "3" || cmd == "SEND_API")
+    {
+        sendCurrentDataToAPI();
+    }
     else if (cmd == "STOP")
     {
         stopRecording();
@@ -315,7 +337,7 @@ void RacingTelemetry::handleSerialCommand(const String &command)
     }
     else if (cmd == "MEMORY")
     {
-        // printMemoryStatus();
+        printMemoryStatus();
     }
     else if (cmd == "GPS")
     {
@@ -328,6 +350,14 @@ void RacingTelemetry::handleSerialCommand(const String &command)
     else if (cmd == "AI")
     {
         printAIStatus();
+    }
+    else if (cmd == "WIFI_STATUS")
+    {
+        printWiFiStatus();
+    }
+    else if (cmd == "API_TEST")
+    {
+        testAPIConnection();
     }
     else if (cmd == "HELP")
     {
@@ -348,6 +378,165 @@ void RacingTelemetry::handleSerialCommand(const String &command)
     }
 }
 
+// === API METHODS IMPLEMENTATION ===
+
+bool RacingTelemetry::connectToWiFi()
+{
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        return true;
+    }
+
+    Serial.println("Connecting to WiFi...");
+    WiFi.begin(ssid, password);
+
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20)
+    {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        Serial.println("\nWiFi connected!");
+        Serial.printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+        return true;
+    }
+    else
+    {
+        Serial.println("\nWiFi connection failed!");
+        return false;
+    }
+}
+
+bool RacingTelemetry::sendDataToAPI(const String &jsonData)
+{
+    if (!connectToWiFi())
+    {
+        Serial.println("Cannot send to API: No WiFi connection");
+        return false;
+    }
+
+    HTTPClient http;
+    http.begin(apiEndpoint);
+
+    // Set headers - hanya Content-Type
+    http.addHeader("Content-Type", "application/json");
+
+    // Set timeout
+    http.setTimeout(5000); // 5 seconds timeout
+
+    // Send POST request
+    int httpCode = http.POST(jsonData);
+    String response = http.getString();
+
+    handleAPIResponse(httpCode, response);
+
+    http.end();
+    return (httpCode == 200 || httpCode == 201);
+}
+
+String RacingTelemetry::prepareTelemetryJSON()
+{
+    const SensorData &data = sensorManager->getCurrentData();
+
+    // Create JSON document
+    DynamicJsonDocument doc(2048);
+
+    // Device information
+    doc["device_id"] = deviceId;
+    doc["timestamp"] = millis();
+    doc["system_status"] = getStatusText();
+    doc["lap_number"] = recordingManager->getCurrentLap();
+
+    // Sensor data
+    JsonObject sensors = doc.createNestedObject("sensors");
+    sensors["afr"] = data.afr;
+    sensors["rpm"] = data.rpm;
+    sensors["temperature"] = data.temp;
+    sensors["tps"] = data.tps;
+    sensors["map_value"] = data.map_value;
+    sensors["incline"] = data.incline;
+    sensors["stroke"] = data.stroke;
+
+    // GPS data
+    if (sensorManager->isGPSValid())
+    {
+        JsonObject gps = doc.createNestedObject("gps");
+        gps["latitude"] = sensorManager->getLatitude();
+        gps["longitude"] = sensorManager->getLongitude();
+        gps["speed"] = sensorManager->getSpeed();
+        gps["satellites"] = sensorManager->getSatelliteCount();
+    }
+
+    // AI Classification
+    JsonObject ai = doc.createNestedObject("ai_classification");
+    ai["classification"] = currentClassification;
+    ai["classification_text"] = classificationText;
+
+    // Cooling system status
+    JsonObject cooling = doc.createNestedObject("cooling");
+    cooling["system_active"] = coolingSystem->isSystemActive();
+    cooling["fan_on"] = coolingSystem->isFanOn();
+    cooling["ewp_on"] = coolingSystem->isEWPOn();
+    cooling["current_temp"] = coolingSystem->getCurrentTemp();
+    cooling["cutoff_active"] = coolingSystem->isCutoffActive();
+
+    // System health
+    JsonObject system = doc.createNestedObject("system_health");
+    system["free_heap"] = ESP.getFreeHeap();
+    system["uptime"] = millis();
+    system["wifi_rssi"] = WiFi.RSSI();
+
+    String jsonString;
+    serializeJson(doc, jsonString);
+    return jsonString;
+}
+
+void RacingTelemetry::handleAPIResponse(int httpCode, const String &response)
+{
+    if (httpCode == 200 || httpCode == 201)
+    {
+        Serial.println("✓ Data sent to API successfully");
+        Serial.printf("Response: %s\n", response.c_str());
+    }
+    else if (httpCode > 0)
+    {
+        Serial.printf("✗ API Error - HTTP %d: %s\n", httpCode, response.c_str());
+    }
+    else
+    {
+        Serial.printf("✗ Connection Error: %d\n", httpCode);
+    }
+}
+
+void RacingTelemetry::sendCurrentDataToAPI()
+{
+    if (currentStatus == SystemStatus::EMERGENCY)
+    {
+        Serial.println("Cannot send to API in emergency state!");
+        return;
+    }
+
+    Serial.println("Preparing telemetry data for API...");
+    String jsonData = prepareTelemetryJSON();
+
+    Serial.printf("JSON Size: %d bytes\n", jsonData.length());
+
+    if (sendDataToAPI(jsonData))
+    {
+        Serial.println("Telemetry data sent to API successfully!");
+    }
+    else
+    {
+        Serial.println("Failed to send telemetry data to API!");
+    }
+}
+
+// === PRINT STATUS METHODS ===
+
 void RacingTelemetry::printSystemStatus()
 {
     Serial.println("=== SYSTEM STATUS ===");
@@ -360,7 +549,7 @@ void RacingTelemetry::printSystemStatus()
     Serial.printf("AI Classification: %s\n", classificationText.c_str());
     Serial.printf("System Uptime: %lu ms\n", millis());
     Serial.printf("Free Heap: %d bytes\n", ESP.getFreeHeap());
-    // Serial.printf("System Errors: %d\n", systemMonitor->getErrorCount());
+    Serial.printf("WiFi Status: %s\n", WiFi.status() == WL_CONNECTED ? "CONNECTED" : "DISCONNECTED");
 }
 
 void RacingTelemetry::printCoolingStatus()
@@ -378,12 +567,10 @@ void RacingTelemetry::printCoolingStatus()
 void RacingTelemetry::printMemoryStatus()
 {
     Serial.println("=== MEMORY STATUS ===");
-    // Serial.printf("Usage: %.1f%%\n", systemMonitor->getMemoryUsagePercent());
     Serial.printf("Free Heap: %d bytes\n", ESP.getFreeHeap());
     Serial.printf("Total Heap: %d bytes\n", ESP.getHeapSize());
     Serial.printf("Min Free Heap: %d bytes\n", ESP.getMinFreeHeap());
     Serial.printf("Max Alloc Heap: %d bytes\n", ESP.getMaxAllocHeap());
-    // Serial.printf("System Errors: %d\n", systemMonitor->getErrorCount());
 }
 
 void RacingTelemetry::printGPSStatus()
@@ -426,11 +613,25 @@ void RacingTelemetry::printAIStatus()
     Serial.printf("Last Classification: %lu ms ago\n", millis() - lastClassification);
 }
 
+void RacingTelemetry::printWiFiStatus()
+{
+    Serial.println("=== WIFI STATUS ===");
+    Serial.printf("Status: %s\n", WiFi.status() == WL_CONNECTED ? "CONNECTED" : "DISCONNECTED");
+    if (WiFi.status() == WL_CONNECTED)
+    {
+        Serial.printf("SSID: %s\n", WiFi.SSID().c_str());
+        Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
+        Serial.printf("RSSI: %d dBm\n", WiFi.RSSI());
+        Serial.printf("Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+    }
+}
+
 void RacingTelemetry::printHelpMenu()
 {
     Serial.println("=== AVAILABLE COMMANDS ===");
     Serial.println("1 or START     - Start recording");
     Serial.println("2 or TRANSMIT  - Transmit data");
+    Serial.println("3 or SEND_API  - Send current data to API");
     Serial.println("STOP           - Stop recording");
     Serial.println("STATUS         - Show system status");
     Serial.println("MENU           - Enter menu");
@@ -442,9 +643,34 @@ void RacingTelemetry::printHelpMenu()
     Serial.println("GPS            - Show GPS status");
     Serial.println("SENSORS        - Show sensor readings");
     Serial.println("AI             - Show AI classification status");
+    Serial.println("WIFI_STATUS    - Show WiFi connection status");
+    Serial.println("API_TEST       - Test API connection");
     Serial.println("HELP           - Show this help menu");
     Serial.println("RESET          - Perform system reset");
     Serial.println("DEBUG          - Toggle debug mode");
+}
+
+void RacingTelemetry::testAPIConnection()
+{
+    Serial.println("Testing API connection...");
+
+    // Create minimal test payload
+    DynamicJsonDocument testDoc(512);
+    testDoc["device_id"] = deviceId;
+    testDoc["test"] = true;
+    testDoc["timestamp"] = millis();
+
+    String testJson;
+    serializeJson(testDoc, testJson);
+
+    if (sendDataToAPI(testJson))
+    {
+        Serial.println("✓ API connection test successful!");
+    }
+    else
+    {
+        Serial.println("✗ API connection test failed!");
+    }
 }
 
 void RacingTelemetry::performSystemReset()
@@ -467,9 +693,6 @@ void RacingTelemetry::performSystemReset()
     // Reset display
     displayManager->exitMenu();
     displayManager->forceUpdate();
-
-    // Reset system monitor
-    // systemMonitor->recoverFromError();
 
     Serial.println("System reset completed");
 }
@@ -512,6 +735,8 @@ String RacingTelemetry::getStatusText() const
         return "UNKNOWN";
     }
 }
+
+// === SYSTEM CONTROL METHODS ===
 
 void RacingTelemetry::startRecording()
 {
@@ -574,8 +799,7 @@ void RacingTelemetry::stopRecording()
     Serial.println("Racing Telemetry: Recording stopped");
 
     // Show completion display
-    displayManager->forceUpdate(); // Atau gunakan showSystemStatus()
-
+    displayManager->forceUpdate();
 }
 
 void RacingTelemetry::transmitData()
